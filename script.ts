@@ -1,7 +1,13 @@
 import { createCanvas, loadImage } from "canvas";
 // @ts-ignore
 import { writeFile } from "fs/promises";
-import { forceSimulation, forceManyBody, forceLink } from "d3-force";
+import {
+  forceSimulation,
+  forceManyBody,
+  forceLink,
+  forceX,
+  forceY,
+} from "d3-force";
 import forceBoundary from "d3-force-boundary";
 
 // Utils & data
@@ -13,6 +19,12 @@ const bbox = {
   y0: HEIGHT * 0.1,
   x1: WIDTH * 0.8,
   y1: HEIGHT * 0.25,
+  get cx() {
+    return (this.x0 + this.x1) / 2;
+  },
+  get cy() {
+    return (this.y0 + this.y1) / 2;
+  },
 };
 
 // Create nodes and links
@@ -55,6 +67,8 @@ labels.forEach((label, index) => {
   );
 });
 
+const type: "dispersed" | "alignVert" = "dispersed";
+
 const simulation = forceSimulation(nodes)
   // multi-leader line should be attracted to each other
   .force(
@@ -64,13 +78,35 @@ const simulation = forceSimulation(nodes)
   // Keeps each annotation line away from each other
   // Increase the strength of this so its always maintained
   // https://observablehq.com/@d3/disjoint-force-directed-graph/2
-  .force("charge", forceManyBody().strength(-1000))
-  .force("collide", rectangleForceCollide())
-  // https://observablehq.com/@roblallier/rectangle-collision-force
-  .force("boundary", forceBoundary(bbox.x0, bbox.y0, bbox.x1, bbox.y1))
-  .stop();
+  .force("charge", forceManyBody().strength(-300))
+  .force("collide", rectangleForceCollide());
 
-simulation.tick(50);
+// There is some trial-and-error depending on the original
+// position of the nodes and the bbox
+// Dispersed: The callouts start from around the bbox the left and bottom side
+// AlignVert: The callouts are aligned vertically on the left side only
+if (type === "dispersed") {
+  simulation.force(
+    "boundary",
+    forceBoundary(bbox.x0, bbox.y0, bbox.x1, bbox.y1)
+  );
+} else if (type === "alignVert") {
+  simulation
+    .force(
+      "x",
+      forceX(bbox.cx).strength((d) => (d.pos === "end" ? 1 : 0.2))
+    )
+    .force(
+      "y",
+      forceY(bbox.cy).strength((d) => (d.pos === "end" ? 1 : 0.2))
+    );
+} else {
+  throw new Error("Invalid type");
+}
+// https://observablehq.com/@roblallier/rectangle-collision-force
+simulation.stop();
+
+simulation.tick(300);
 
 // RENDER
 const canvas = createCanvas(WIDTH, HEIGHT);
